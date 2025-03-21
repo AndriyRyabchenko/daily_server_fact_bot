@@ -1,0 +1,5 @@
+.env
+venv/
+__pycache__/
+sent_facts.txt
+*.log
