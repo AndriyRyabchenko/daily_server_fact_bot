@@ -3,38 +3,28 @@ import openai
 import logging
 from telegram import Bot
 from dotenv import load_dotenv
+from datetime import datetime
 
-# === Завантаження змінних з .env ===
+# === Завантаження змінних середовища ===
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID")
 
-# === Налаштування логів ===
+# === Лог-файл ===
+LOG_FILE = "sent_facts.log"
 logging.basicConfig(
-    filename='fact_bot.log',
+    filename=LOG_FILE,
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
-# === Зчитування вже надісланих фактів ===
-SENT_FACTS_FILE = "sent_facts.txt"
-def is_fact_already_sent(fact):
-    if not os.path.exists(SENT_FACTS_FILE):
-        return False
-    with open(SENT_FACTS_FILE, "r", encoding="utf-8") as f:
-        return fact in f.read()
-
-def save_fact(fact):
-    with open(SENT_FACTS_FILE, "a", encoding="utf-8") as f:
-        f.write(fact + "\n")
-
-# === Отримання факту від OpenAI ===
+# === Генерація факту через OpenAI ===
 def get_server_fact():
     openai.api_key = OPENAI_API_KEY
     prompt = (
-        "Згенеруй один цікавий факт зі світу серверів, коротко, простою мовою, "
-        "у стилі для публікації в Telegram-каналі. Максимум 50 слів. Без зайвого вступу, лише факт."
+        "Згенеруй один цікавий факт зі світу серверів, коротко і просто, у стилі для Telegram. "
+        "Без привітання. Максимум 50 слів."
     )
     try:
         response = openai.ChatCompletion.create(
@@ -44,30 +34,30 @@ def get_server_fact():
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
-        logging.error(f"Помилка при запиті до OpenAI: {e}")
+        logging.error(f"❌ OpenAI error: {e}")
         return None
 
-# === Надсилання в Telegram ===
-def post_to_telegram(text):
+# === Відправка в Telegram ===
+def send_to_telegram(fact):
     try:
         bot = Bot(token=TELEGRAM_BOT_TOKEN)
-        bot.send_message(chat_id=TELEGRAM_CHANNEL_ID, text=f"🖥️ Цікавий факт:\n\n{text}")
-        logging.info(f"Факт надіслано: {text}")
+        bot.send_message(chat_id=TELEGRAM_CHANNEL_ID, text=f"🖥️ Цікавий факт:\n\n{fact}")
+        logging.info(f"✅ Надіслано факт: {fact}")
+        return True
     except Exception as e:
-        logging.error(f"Помилка при надсиланні до Telegram: {e}")
+        logging.error(f"❌ Telegram error: {e}")
+        return False
 
-# === Основна логіка ===
+# === Головна функція ===
 def main():
     fact = get_server_fact()
     if not fact:
+        logging.error("❌ Факт не згенеровано.")
         return
 
-    if is_fact_already_sent(fact):
-        logging.warning("Згенерований факт уже був раніше. Пропущено.")
-        return
-
-    post_to_telegram(fact)
-    save_fact(fact)
+    success = send_to_telegram(fact)
+    if not success:
+        logging.warning(f"⚠️ Факт збережено локально через помилку: {fact}")
 
 if __name__ == "__main__":
     main()
